@@ -30,6 +30,11 @@ sv_help = '''
 
 sv = Service('cpdaily-HFUT', help_=sv_help, enable_on_default=False, bundle='今日校园订阅')
 
+# 传参
+def get_superqq():
+    superqq_tmp = superqq
+    return superqq_tmp
+
 #帮助界面
 @sv.on_fullmatch("打卡帮助")
 async def help(bot, ev):
