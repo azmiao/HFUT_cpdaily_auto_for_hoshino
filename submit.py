@@ -349,7 +349,7 @@ def sendEmail(send,msg):
         server.quit()  # 关闭连接
     except Exception:
         printLog("邮件发送失败")
-    else: print("邮件发送成功")
+    else: printLog("邮件发送成功")
 
 # 邮件发送
 def InfoSubmit(msg, send=None):

@@ -19,7 +19,7 @@ sv_help = '''
 [添加用户 学号 密码 QQ] 添加新用户
 (格式:添加用户 2018214233 233 2333)
 
-[删除用户 学号] 删除信息（限维护组）
+[删除用户 学号] 删除信息（限本人或维护组）
 
 [全员打卡] 全员手动打卡（限维护组）
 
@@ -93,7 +93,7 @@ async def cpdailyHFUT(bot, ev):
                 msg = msg + '\n发生错误，错误用户为'+ f'{user["user"]["username"]}' + '，可能的原因是不在填报时间范围内，详情请联系维护组'
                 # await bot.send(ev, msg)
         except HTTPError as httpError:
-            print(f'发生HTTP错误：{httpError}，终止当前用户的处理')
+            printLog(f'发生HTTP错误：{httpError}，终止当前用户的处理')
             emailmsg = '''
 
 你好：
@@ -172,7 +172,7 @@ async def _onlyinfo(bot, ev: CQEvent, region: int):
                         msg = '发生错误，错误用户为'+ f'{user["user"]["username"]}' + '，可能的原因是不在填报时间范围内，详情请联系维护组'
                         await bot.send(ev, msg)
                 except HTTPError as httpError:
-                    print(f'发生HTTP错误：{httpError}，终止当前用户的处理')
+                    printLog(f'发生HTTP错误：{httpError}，终止当前用户的处理')
                     emailmsg = '''
 
 你好：

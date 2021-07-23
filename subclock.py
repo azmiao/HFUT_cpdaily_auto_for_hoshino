@@ -53,7 +53,7 @@ async def cpdailyHFUTauto():
                 msg = msg + '\n发生错误，错误用户为'+ f'{user["user"]["username"]}' + '，可能的原因是不在填报时间范围内，详情请联系维护组'
                 # await svsub.broadcast(msg, 'cpdaily-HFUT-auto', 0.2)
         except HTTPError as httpError:
-            print(f'发生HTTP错误：{httpError}，终止当前用户的处理')
+            printLog(f'发生HTTP错误：{httpError}，终止当前用户的处理')
             emailmsg = '''
 
 你好：
