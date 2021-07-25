@@ -149,7 +149,7 @@ async def _delinfo(bot, ev: CQEvent, region: int):
     for user in config['users']:
         if user['user']['username'] == str(textname):
             qq = user['user']['email'].replace('@qq.com', '')
-            if int(qq) != uid or uid != int(superqq):
+            if int(qq) != uid and uid != int(superqq):
                 msg = '您不是该学号对应QQ本人，需要删除需要本人操作或联系管理员操作!'
                 await bot.send(ev, msg)
                 return
