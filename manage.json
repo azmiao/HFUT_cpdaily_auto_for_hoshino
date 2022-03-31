@@ -1,0 +1,8 @@
+{   
+    "enable_default": true,
+    "account": "xxxxxxxxx@xxxxx.com",
+    "emailpassword": "xxxxxxxxx",
+    "port": 465,
+    "server": "smtp.163.com",
+    "location": "安徽省合肥市蜀山区"
+}

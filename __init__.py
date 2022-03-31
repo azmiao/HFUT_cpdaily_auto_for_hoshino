@@ -1,184 +1,182 @@
-import yaml
-import re
-import time
-import os,base64
+import os
 import asyncio
-from collections import defaultdict
-import hoshino
-from hoshino import Service, R, priv
-from hoshino.typing import *
-from hoshino.util import FreqLimiter, concat_pic, pic2b64, silence
-from .submit import *
-from .submain import *
+import json
+from hoshino import Service, logger, priv
+from .submain import cpdaily_submit, single_submit
 
+# 首次启动时若配置文件不存在则自动生成配置文件
+current_dir = os.path.join(os.path.dirname(__file__), 'config.json')
+if not os.path.exists(current_dir):
+    init_data = {}
+    with open(current_dir, 'w', encoding='UTF-8') as f:
+        json.dump(init_data, f, indent=4, ensure_ascii=False)
+    logger.info(f'cpdaily配置文件不存在，现已成功创建')
 
-# ============下方信息注意填写完整============
+sv_help = '''
+[添加用户 学号 密码 QQ] 添加新用户
 
-# 下方True即为开启邮箱功能
-emailenable = True
-# account为邮箱账户（发件人）
-account = 'xxxxxxxxx@xxxxx.com'
-# emailpassword不是邮箱密码，而是邮箱的授权码，可进入邮箱设置生成
-emailpassword = 'xxxxxxxxx'
-# port为邮箱发送端口，百度一下你就知道，例如163邮箱的port为465
-port = 465
-# 填写邮件的smtp服务器，百度一下：qq/163等等邮箱smtp服务器，即可，例如下面的是163的
-server = 'smtp.163.com'
+[删除用户 学号] 删除信息（限本人或维护组）
 
-# 下方填入自己的信息，作为初始化信息用
-# owneremail是自己接受打卡结果的邮箱，qq邮箱也行
-owneremail = 'xxxxxxxxx@xxxx.com'
-# location位置，合工大的就不用改了
-location = '安徽省合肥市蜀山区'
-# 自己疫情信息收集的密码，尽量一次填对，错多了会有验证码就难搞了，登录密码应该是这个的密码 https://cas.hfut.edu.cn/cas/login
-ownerpassword = 'xxxxxxxxxx'
-# 自己的学号，十位数，别填错了
-ownerusername = '2333333333'
+[全员打卡] 全员手动打卡（限维护组）
 
-# ============上方信息注意填写完整============
+[单独打卡 学号] 顾名思义
 
+[开启打卡邮件提醒 学号] 添加用户默认开启（限本人或维护组）
 
-sv = Service('cpdaily-HFUT-init', enable_on_default=False, bundle='打卡初始化')
+[关闭打卡邮件提醒 学号] 不想要就关闭了它（限本人或维护组）
 
-# 创建config.yml文件并初始化基础信息
-@sv.on_fullmatch("今日校园初始化")
-async def createinfo(bot, ev):
-    if not priv.check_priv(ev, priv.SUPERUSER):
-        msg = '很抱歉您没有权限进行此操作，该操作仅限维护组'
-        await bot.send(ev, msg)
-        return
-    data = {'Info': {
-        'Email': 
-        {'account': account,
-        'enable': emailenable, 
-        'password': emailpassword, 
-        'port': port, 
-        'server': server}}, 
-        'users': 
-        [{'user': 
-        {'email': owneremail, 
-        'location': location, 
-        'password': ownerpassword, 
-        'username': ownerusername}}]}
+[打卡用户列表] 看看所有用户
+'''.strip()
 
-    current_dir = os.path.join(os.path.dirname(__file__), 'config.yml')
-    with open(current_dir, "w", encoding="UTF-8") as f:
-        yaml.dump(data, f,allow_unicode=True)
-    msg = '初始化成功'
-    await bot.send(ev, msg)
+sv = Service('cpdaily_v2', help_=sv_help, enable_on_default=False, visible=False)
+svau = Service('cpdaily_v2_auto', enable_on_default=False, visible=False)
 
-@sv.on_prefix('添加用户')
-async def addinfo(bot, ev):
-    await _addinfo(bot, ev, region=1)
+# 帮助界面
+@sv.on_fullmatch("打卡帮助")
+async def help(bot, ev):
+    await bot.send(ev, sv_help)
 
 # 为多用户模式添加额外用户
-async def _addinfo(bot, ev: CQEvent, region: int):
-    # 处理输入数据
+@sv.on_prefix('添加用户')
+async def addinfo(bot, ev):
+    self_id = ev.self_id
     alltext = ev.message.extract_plain_text()
+    text_list = alltext.split(' ', 2)
+    username = text_list[0]
+    # 判断是否是十位数
+    if not len(username) == 10:
+        msg = '添加失败！学号必须是10位数'
+        await bot.finish(ev, msg)
+    password = text_list[1]
+    qq = text_list[2]
+    email = qq + '@qq.com'
+    msg = f'正在添加您的信息：\n学号 = {username}\n密码 = {password}\nQQ = {qq}\n请尽快确认您的信息，本消息将在五秒后撤回'
+    msgback = await bot.send(ev, msg)
+    msg_id = msgback['message_id']
+    await asyncio.sleep(5)
+    await bot.delete_msg(self_id=self_id, message_id=msg_id)
+    
+    with open(current_dir, 'r', encoding='UTF-8') as f:
+        f_data = json.load(f)
+    manage_dir = os.path.join(os.path.dirname(__file__), 'manage.json')
+    with open(manage_dir, 'r', encoding='UTF-8') as af:
+        m_data = json.load(af)
+    enable_default = m_data['enable_default']
+    location = m_data['location']
+    f_data[username] = {
+        'password': password,
+        'email': email,
+        'location': location,
+        'enable_email': enable_default
+    }
+    with open(current_dir, 'w', encoding='UTF-8') as f:
+        json.dump(f_data, f, indent=4, ensure_ascii=False)
+    msg = f'{username}的信息添加完成'
+    await bot.send(ev, msg)
 
-    nametext_dir = re.findall(r" .*",alltext)
-    for name_dir in nametext_dir:
-        username = alltext.replace(name_dir,'')
-    # msg = username
-    # await bot.send(ev, msg)
-    if len(username) == 10:
-        # print('username = ' + username)
-        msg1 = '\n学号 = ' + username
-        # await bot.send(ev, msg)
-
-        passtext = re.findall(r" .+? ",alltext)
-        for password in passtext:
-            password = password.replace(' ','')
-        # print('password = ' + password)
-        msg2 = '\n密码 = ' + password
-        # await bot.send(ev, msg)
-
-        qqtext = re.findall(r" .*",alltext)
-        for qq in qqtext:
-            pass_dir = password + ' '
-            qq = qq.replace(pass_dir,'')
-            qq = qq.replace(' ','')
-            email = qq + '@qq.com'
-        # print('qq = ' + qq)
-        msg3 = '\nQQ = ' + qq
-        # await bot.send(ev, msg)
-
-        self_id = ev.self_id
-        msg = '正在添加您的信息：'
-        msg4 = '\n请尽快确认您的信息，本消息将在五秒后撤回'
-        msg = msg + msg1 + msg2 + msg3 + msg4
-        msgback = await bot.send(ev, msg)
-        msg_id = msgback['message_id']
-        await asyncio.sleep(5)
-        await bot.delete_msg(self_id=self_id, message_id=msg_id)
-        
-        current_dir = os.path.join(os.path.dirname(__file__), 'config.yml')
-        file = open(current_dir, 'r', encoding="UTF-8")
-        file_data = file.read()
-        file.close()
-        config = yaml.load(file_data, Loader=yaml.FullLoader)
-
-        data = {'user': {
-            'email': email, 
-            'location': location, 
-            'password': password, 
-            'username': username}}
-
-        config["users"].append(data)
-
-        with open(current_dir, "w", encoding="UTF-8") as f:
-            yaml.dump(config, f,allow_unicode=True)
-        msg = username + '的信息添加完成'
-        await bot.send(ev, msg)
-    else:
-        msg = '学号格式错误，请重新输入'
-        await bot.send(ev, msg)
-
+# 删除用户
 @sv.on_prefix('删除用户')
 async def delinfo(bot, ev):
-    await _delinfo(bot, ev, region=1)
-
-# 删除错误信息用户
-async def _delinfo(bot, ev: CQEvent, region: int):
-    uid = ev.user_id
-    superqq = get_superqq()
-    # 处理输入数据
-    textname = ev.message.extract_plain_text()
-    config = getYmlConfig()
-    setnum = 0
-    for user in config['users']:
-        if user['user']['username'] == str(textname):
-            qq = user['user']['email'].replace('@qq.com', '')
-            if int(qq) != uid and uid != int(superqq):
-                msg = '您不是该学号对应QQ本人，需要删除需要本人操作或联系管理员操作!'
-                await bot.send(ev, msg)
-                return
-            # print(user['user']['username'])
-            msg = '正在删除' + textname + '的所有信息'
-            await bot.send(ev, msg)
-
-            data = {'user': {
-            'email': user['user']['email'], 
-            'location': user['user']['location'], 
-            'password': user['user']['password'], 
-            'username': user['user']['username']}}
-            config["users"].remove(data)
-            current_dir = os.path.join(os.path.dirname(__file__), 'config.yml')
-            with open(current_dir, "w", encoding="UTF-8") as f:
-                yaml.dump(config, f,allow_unicode=True)
-
-            msg = textname + '的信息删除成功'
-            await bot.send(ev, msg)
-            setnum = 1
-    if setnum == 0:
-        msg = '未找到此用户'
-        await bot.send(ev, msg)
+    uid = str(ev.user_id)
+    username = str(ev.message)
+    with open(current_dir, 'r', encoding='UTF-8') as f:
+        f_data = json.load(f)
+    if username not in list(f_data.keys()):
+        msg = f'未找到此用户:{username}'
+        await bot.finish(ev, msg)
+    qq = f_data[username]['email'].replace('@qq.com', '')
+    if not priv.check_priv(ev, priv.SUPERUSER) and uid != qq:
+        msg = '您不是该学号对应QQ本人，需要删除需要本人操作或联系管理员操作!'
+        await bot.finish(ev, msg)
+    f_data.pop(username)
+    with open(current_dir, 'w', encoding='UTF-8') as f:
+        json.dump(f_data, f, indent=4, ensure_ascii=False)
+    msg = f'{username}的信息删除成功'
+    await bot.send(ev, msg)
 
 # 查看所有用户
 @sv.on_fullmatch("打卡用户列表")
 async def allinfo(bot, ev):
-    config = getYmlConfig()
-    msg = '使用该打卡功能的用户有：'
-    for user in config['users']:
-        msg = msg + '\n' + user['user']['username']
+    with open(current_dir, 'r', encoding='UTF-8') as f:
+        f_data = json.load(f)
+    user_list = list(f_data.keys())
+    msg = '使用该功能的用户有：\n' + '\n'.join(user_list)
+    await bot.send(ev, msg)
+
+# 全员手动提交
+@sv.on_fullmatch('全员打卡')
+async def submit_all(bot, ev):
+    if not priv.check_priv(ev, priv.SUPERUSER):
+        msg = '很抱歉您没有权限进行全员提交，该操作仅限维护组。若需要单独提交请输入“单独打卡 学号”'
+        await bot.finish(ev, msg)
+    msg = await cpdaily_submit('手动')
+    await bot.send(ev, msg)
+
+# 自动打卡功能
+@svau.scheduled_job('cron', hour='14', minute='26')
+async def submit_all_auto():
+    msg = await cpdaily_submit('自动')
+    await svau.broadcast(msg, 'cpdaily-HFUT-auto', 0.2)
+
+# 单独打卡
+@sv.on_prefix('单独打卡')
+async def submit_single(bot, ev):
+    uid = str(ev.user_id)
+    username = str(ev.message)
+    with open(current_dir, 'r', encoding='UTF-8') as f:
+        f_data = json.load(f)
+    if username not in list(f_data.keys()):
+        msg = f'未找到此用户:{username}'
+        await bot.finish(ev, msg)
+    qq = f_data[username]['email'].replace('@qq.com', '')
+    if not priv.check_priv(ev, priv.SUPERUSER) and uid != qq:
+        msg = '您不是该学号对应QQ本人，需要删除需要本人操作或联系管理员操作!'
+        await bot.finish(ev, msg)
+    msg = await single_submit(username, '手动')
+    await bot.send(ev, msg)
+
+# 开启打卡邮件提醒
+@sv.on_prefix('开启打卡邮件提醒')
+async def enable_email(bot, ev):
+    uid = str(ev.user_id)
+    username = str(ev.message)
+    with open(current_dir, 'r', encoding='UTF-8') as f:
+        f_data = json.load(f)
+    if username not in list(f_data.keys()):
+        msg = f'未找到此用户:{username}'
+        await bot.finish(ev, msg)
+    qq = f_data[username]['email'].replace('@qq.com', '')
+    if not priv.check_priv(ev, priv.SUPERUSER) and uid != qq:
+        msg = '您不是该学号对应QQ本人，需要删除需要本人操作或联系管理员操作!'
+        await bot.finish(ev, msg)
+    if f_data[username]['enable_email']:
+        msg = '您已经开启了邮件提醒，无需再次开启'
+        await bot.finish(ev, msg)
+    f_data[username]['enable_email'] = True
+    with open(current_dir, 'w', encoding='UTF-8') as f:
+        json.dump(f_data, f, indent=4, ensure_ascii=False)
+    msg = '邮件提醒开启成功'
+    await bot.send(ev, msg)
+
+# 关闭打卡邮件提醒
+@sv.on_prefix('关闭打卡邮件提醒')
+async def disable_email(bot, ev):
+    uid = str(ev.user_id)
+    username = str(ev.message)
+    with open(current_dir, 'r', encoding='UTF-8') as f:
+        f_data = json.load(f)
+    if username not in list(f_data.keys()):
+        msg = f'未找到此用户:{username}'
+        await bot.finish(ev, msg)
+    qq = f_data[username]['email'].replace('@qq.com', '')
+    if not priv.check_priv(ev, priv.SUPERUSER) and uid != qq:
+        msg = '您不是该学号对应QQ本人，需要删除需要本人操作或联系管理员操作!'
+        await bot.finish(ev, msg)
+    if not f_data[username]['enable_email']:
+        msg = '您已经关闭了邮件提醒，无需再次关闭'
+        await bot.finish(ev, msg)
+    f_data[username]['enable_email'] = False
+    with open(current_dir, 'w', encoding='UTF-8') as f:
+        json.dump(f_data, f, indent=4, ensure_ascii=False)
+    msg = '邮件提醒关闭成功'
     await bot.send(ev, msg)
