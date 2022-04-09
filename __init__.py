@@ -113,7 +113,7 @@ async def submit_all(bot, ev):
     await bot.send(ev, msg)
 
 # 自动打卡功能
-@svau.scheduled_job('cron', hour='14', minute='26')
+@svau.scheduled_job('cron', hour='14', minute='16')
 async def submit_all_auto():
     msg = await cpdaily_submit('自动')
     await svau.broadcast(msg, 'cpdaily-HFUT-auto', 0.2)
