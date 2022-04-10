@@ -195,8 +195,6 @@ async def login_submit(username: str, password: str, location: str):
         'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/judgeTodayHasData.do',
         data={'data': json.dumps({'TBSJ': todayDateStr})})
     ifSubmittedJson = ifSubmitted.json()
-    if not ifSubmittedJson.get('data', None):
-        return 'login_failed'
     if len(ifSubmittedJson['data']) == 1:
         logger.info('今天已经打过卡了，处理结束')
         return 'have_done'

@@ -18,15 +18,12 @@ async def cpdaily_submit(mode):
     with open(manage_dir, 'r', encoding='UTF-8') as af:
         m_data = json.load(af)
     msg_list = []
-    flag = ''
-    for username in list(f_data.keys()):
-        await asyncio.sleep(0.5)
-        msg_list = await get_msg_list(username, f_data, m_data, mode, msg_list)
-        if isinstance(msg_list, str):
-            break
-    if isinstance(msg_list, str):
-        if flag == 'login_failed':
-            return '登录超时，可能是网站又又又炸了，请稍后再提交吧'
+    try:
+        for username in list(f_data.keys()):
+            await asyncio.sleep(0.5)
+            msg_list = await get_msg_list(username, f_data, m_data, mode, msg_list)
+    except KeyError as e:
+        return f'出现错误：{e}，可能是网站又又又炸了'
     logger.info('==所有用户处理结束==')
     if not msg_list:
         msg = f'全部{mode}成功提交'
@@ -43,10 +40,10 @@ async def single_submit(username, mode):
     with open(manage_dir, 'r', encoding='UTF-8') as af:
         m_data = json.load(af)
     msg_list = []
-    msg_list = await get_msg_list(username, f_data, m_data, mode, msg_list)
-    if isinstance(msg_list, str):
-        if msg_list == 'login_failed':
-            return '登录超时，可能是网站又又又炸了，请稍后再提交吧'
+    try:
+        msg_list = await get_msg_list(username, f_data, m_data, mode, msg_list)
+    except KeyError as e:
+        return f'出现错误：{e}，可能是网站又又又炸了'
     logger.info(f'=={username}处理结束==')
     if not msg_list:
         msg = f'{username}成功{mode}提交'
@@ -69,8 +66,6 @@ async def get_msg_list(username, f_data, m_data, mode, msg_list):
             elif flag == 'need_self':
                 info = f'{username}本次请手动填报提交'
                 msg_list.append(info)
-            elif flag == 'login_failed':
-                return flag
             logger.info(info)
             emailmsg = f'''
 
