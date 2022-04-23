@@ -4,5 +4,6 @@
     "emailpassword": "xxxxxxxxx",
     "port": 465,
     "server": "smtp.163.com",
-    "location": "安徽省合肥市蜀山区"
+    "location": "安徽省合肥市蜀山区",
+    "region": "安徽省//合肥市//蜀山区"
 }

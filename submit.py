@@ -43,7 +43,7 @@ async def encryptPassword(password: str, key: str) -> str:
     return encryptedPassword.decode('utf-8')
 
 # 登录并提交
-async def login_submit(username: str, password: str, location: str):
+async def login_submit(username: str, password: str, location: str, region: str):
     #### 开始登录
     requestSession = requests.session()
     requestSession.headers.update({
@@ -73,7 +73,7 @@ async def login_submit(username: str, password: str, location: str):
     # check if verification code is required
     if responseForKey.json():
         logger.info('需要验证码，过一会再试试吧。')
-        return False
+        return False, '需要验证码，过一会再试试吧。'
 
     # try to login
     encryptedPassword = await encryptPassword(password, encryptionKey)
@@ -92,9 +92,9 @@ async def login_submit(username: str, password: str, location: str):
         if checkIdResponseJson['data']['mailRequired'] or checkIdResponseJson['data']['phoneRequired']:
             # the problem may be solved manually
             logger.info('需要进行手机或邮箱认证，移步: https://cas.hfut.edu.cn/')
-            return False
+            return False, '需要进行手机或邮箱认证'
         logger.info(f'处理checkUserIdenty时出现错误：{checkIdResponseJson["msg"]}')
-        return False
+        return False, f'处理checkUserIdenty时出现错误：{checkIdResponseJson["msg"]}'
     requestSession.headers.update(
         {'Content-Type': 'application/x-www-form-urlencoded'})
 
@@ -115,7 +115,7 @@ async def login_submit(username: str, password: str, location: str):
     if 'cas协议登录成功跳转页面。' not in loginResponse.text:
         # log in failed
         logger.info('登录失败')
-        return False
+        return False, '未知原因，登录失败'
     # log in success
     logger.info('登录成功')
 
@@ -172,7 +172,7 @@ async def login_submit(username: str, password: str, location: str):
     if roleConfigJson['code'] != '0':
         # :(
         logger.info(f'处理roleConfig时发生错误：{roleConfigJson["msg"]}')
-        return False
+        return False, f'处理roleConfig时发生错误：{roleConfigJson["msg"]}'
 
     # get menu info
     menuInfoResponse = requestSession.post(
@@ -185,7 +185,7 @@ async def login_submit(username: str, password: str, location: str):
     if menuInfoJson['code'] != '0':
         # :(
         logger.info(f'处理menuInfo时发生错误：{menuInfoJson["msg"]}')
-        return False
+        return False, f'处理menuInfo时发生错误：{menuInfoJson["msg"]}'
 
     todayDateStr = "%.2d-%.2d-%.2d" % time.localtime()[:3]
 
@@ -197,7 +197,7 @@ async def login_submit(username: str, password: str, location: str):
     ifSubmittedJson = ifSubmitted.json()
     if len(ifSubmittedJson['data']) == 1:
         logger.info('今天已经打过卡了，处理结束')
-        return 'have_done'
+        return 'have_done', ''
 
     # get setting... for what?
     requestSession.headers.pop('Content-Type')
@@ -223,7 +223,7 @@ async def login_submit(username: str, password: str, location: str):
     if lastSubmittedJson['code'] != '0':
         # something wrong with the form submitted last time
         logger.info('上次填报提交的信息出现了问题，本次最好手动填报提交。')
-        return 'need_self'
+        return 'need_self', ''
 
     studentKeyResponse = requestSession.post(
         url=
@@ -238,6 +238,7 @@ async def login_submit(username: str, password: str, location: str):
         'DFHTJHBSJ': '',
         'DZ_SFSB': '1',
         'DZ_TBDZ': location,
+        'DZ_TBSJDZ': region,
         'GCJSRQ': '',
         'GCKSRQ': '',
         'TBSJ': todayDateStr,
@@ -262,10 +263,10 @@ async def login_submit(username: str, password: str, location: str):
     if submitResponseJson['code'] != '0':
         # failed
         logger.info(f'提交时出现错误：{submitResponseJson["msg"]}')
-        return False
+        return False, f'提交时出现错误：{submitResponseJson["msg"]}'
 
     # succeeded
     logger.info('提交成功')
     requestSession.headers.pop('Referer')
     requestSession.headers.pop('Content-Type')
-    return 'success'
+    return 'success', ''

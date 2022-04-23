@@ -3,6 +3,7 @@ import os
 import asyncio
 import json
 import smtplib
+import re
 from email.mime.text import MIMEText
 from email.utils import formataddr
 
@@ -17,6 +18,7 @@ async def cpdaily_submit(mode):
     manage_dir = os.path.join(os.path.dirname(__file__), 'manage.json')
     with open(manage_dir, 'r', encoding='UTF-8') as af:
         m_data = json.load(af)
+    num = len(list(f_data.keys()))
     msg_list = []
     try:
         for username in list(f_data.keys()):
@@ -27,6 +29,9 @@ async def cpdaily_submit(mode):
     logger.info('==所有用户处理结束==')
     if not msg_list:
         msg = f'全部{mode}成功提交'
+    elif len(msg_list) == num:
+        error_info = re.search(r'发生错误：\S*', msg_list[0]).group()
+        msg = f'警告：\n全员提交失败！\n{error_info}'
     else:
         msg = f'全部提交完成，其中部分用户提交出现问题：\n' + '\n'.join(msg_list)
     return msg
@@ -56,7 +61,7 @@ async def get_msg_list(username, f_data, m_data, mode, msg_list):
     logger.info(f'开始处理用户{username}')
     try:
         # 登录并提交
-        flag = await login_submit(username, f_data[username]['password'], m_data['location'])
+        flag, error_info = await login_submit(username, f_data[username]['password'], m_data['location'], m_data['region'])
         if flag:
             if flag == 'success':
                 info = f'{mode}提交成功'
@@ -77,7 +82,7 @@ async def get_msg_list(username, f_data, m_data, mode, msg_list):
             '''
             await InfoSubmit(username, m_data, emailmsg, f_data[username]['email'], f_data[username]['enable_email'])
         else:
-            logger.info(f'{username}发生错误：不在填报时间范围内')
+            logger.info(f'{username}发生错误：{error_info}')
             emailmsg = f'''
 
 你好：
@@ -85,10 +90,10 @@ async def get_msg_list(username, f_data, m_data, mode, msg_list):
     来自{mode}提交系统的消息：
 
                       {mode}提交失败！
-        {username}发生错误：不在填报时间范围内
+        {username}发生错误：{error_info}
             '''
             await InfoSubmit(username, m_data, emailmsg, f_data[username]['email'], f_data[username]['enable_email'])
-            msg_list.append(f'{username}发生错误：不在填报时间范围内')
+            msg_list.append(f'{username}发生错误：{error_info}')
     except requests.HTTPError:
         logger.info(f'{username}发生错误：密码错误')
         emailmsg = f'''
