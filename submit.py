@@ -225,6 +225,20 @@ async def login_submit(username: str, password: str, location: str, region: str)
         logger.info('上次填报提交的信息出现了问题，本次最好手动填报提交。')
         return 'need_self', ''
 
+    # get the form submitted yesterday
+    todayDateStr_tmp = "%.2d-%.2d" % time.localtime()[:2]
+    yes_day = time.localtime().tm_mday - 1
+    yes_DateStr = f'{todayDateStr_tmp}-{yes_day}-{username}'
+    requestSession.headers.update(
+        {'Content-Type': 'application/x-www-form-urlencoded'})
+    yes_SubmittedResponse = requestSession.post(
+        url=
+        'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/getStuXx.do',
+        data={'data': json.dumps({'WID': yes_DateStr,'TBSJ': todayDateStr})})
+    yes_SubmittedResponse.raise_for_status()
+
+    yes_SubmittedJson = yes_SubmittedResponse.json()
+
     studentKeyResponse = requestSession.post(
         url=
         'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/studentKey.do',
@@ -239,6 +253,12 @@ async def login_submit(username: str, password: str, location: str, region: str)
         'DZ_SFSB': '1',
         'DZ_TBDZ': location,
         'DZ_TBSJDZ': region,
+        "DZ_AKMSFYC_DISPLAY": "否",
+        "DZ_XCKSFYC_DISPLAY": "否",
+        "DZ_AKMSFYC": "0",
+        "DZ_XCKSFYC": "0",
+        "DZ_SCAKMJT": yes_SubmittedJson['data']['DZ_SCAKMJT'],
+        "DZ_SCXCKJT": yes_SubmittedJson['data']['DZ_SCXCKJT'],
         'GCJSRQ': '',
         'GCKSRQ': '',
         'TBSJ': todayDateStr,

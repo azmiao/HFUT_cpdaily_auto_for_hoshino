@@ -20,12 +20,17 @@ async def cpdaily_submit(mode):
         m_data = json.load(af)
     num = len(list(f_data.keys()))
     msg_list = []
-    try:
-        for username in list(f_data.keys()):
-            await asyncio.sleep(0.5)
+    for username in list(f_data.keys()):
+        await asyncio.sleep(0.5)
+        try:
             msg_list = await get_msg_list(username, f_data, m_data, mode, msg_list)
-    except KeyError as e:
-        return f'出现错误：{e}，可能是网站又又又炸了'
+        except KeyError as e:
+            if str(e) == "'data'":
+                msg_list.append(f'{username}前一天未打卡，无法自动打卡，已跳过')
+                logger.info(f'{username}前一天未打卡，无法自动打卡，已跳过')
+                continue
+            else:
+                return f'出现错误：{e}，可能是网站又又又炸了'
     logger.info('==所有用户处理结束==')
     if not msg_list:
         msg = f'全部{mode}成功提交'
