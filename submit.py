@@ -2,6 +2,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import base64
 import time
+from datetime import date, timedelta
 import json
 import requests
 
@@ -226,9 +227,8 @@ async def login_submit(username: str, password: str, location: str, region: str)
         return 'need_self', ''
 
     # get the form submitted yesterday
-    todayDateStr_tmp = "%.2d-%.2d" % time.localtime()[:2]
-    yes_day = time.localtime().tm_mday - 1
-    yes_DateStr = f'{todayDateStr_tmp}-{yes_day}-{username}'
+    todayDateStr_tmp = (date.today() + timedelta(days = -1)).strftime("%Y-%m-%d")
+    yes_DateStr = f'{todayDateStr_tmp}-{username}'
     requestSession.headers.update(
         {'Content-Type': 'application/x-www-form-urlencoded'})
     yes_SubmittedResponse = requestSession.post(
